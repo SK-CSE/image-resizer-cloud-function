@@ -15,6 +15,7 @@ const os_1 = require("os");
 const path_1 = require("path");
 const sharp = require("sharp");
 const fs = require("fs-extra");
+const Busboy = require("busboy");
 exports.generateThumbnails = functions.storage
     .object()
     .onFinalize((object) => __awaiter(this, void 0, void 0, function* () {
@@ -66,7 +67,35 @@ exports.generateThumbnails = functions.storage
 // // Start writing Firebase Functions
 // // https://firebase.google.com/docs/functions/typescript
 //
-// export const helloWorld = functions.https.onRequest((request, response) => {
-//  response.send("Hello from Firebase!");
-// });
+exports.uploadFile = functions.https.onRequest((req, res) => {
+    //  response.send("Hello from Firebase!");
+    if (req.method === 'POST') {
+        const busboy = new Busboy({ headers: req.headers });
+        busboy.on('file', (fieldname, file, filename) => {
+            console.log(`Processed file ${filename}`);
+            const filepath = path_1.join(os_1.tmpdir(), filename);
+            const writeStream = fs.createWriteStream(filepath);
+            file.pipe(writeStream);
+            file.on('end', () => {
+                writeStream.end();
+            });
+            writeStream.on('finish', () => {
+                const bucketName = 'abcx-1645e.appspot.com';
+                const bucket = gcs.bucket(bucketName);
+                bucket.upload(filepath)
+                    .then(() => {
+                    console.log(`${filepath} uploaded to ${bucketName}.`);
+                })
+                    .catch(err => {
+                    console.error('ERROR:', err);
+                    return res.send();
+                });
+            });
+            writeStream.on('error', () => { console.log('error'); });
+        });
+        busboy.on('finish', () => {
+            return res.status(200).jsonp({ "msg": "success" });
+        });
+    }
+});
 //# sourceMappingURL=index.js.map
